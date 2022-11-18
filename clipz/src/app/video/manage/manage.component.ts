@@ -1,5 +1,9 @@
+import { ModalService } from './../../services/modal.service';
+import { ClipService } from 'src/app/clip.service';
 import { Component, OnInit } from '@angular/core';
 import { ActivatedRoute, Router, Params } from '@angular/router';
+import IClip from 'src/app/models/clip.model';
+import { BehaviorSubject } from 'rxjs';
 
 @Component({
   selector: 'app-manage',
@@ -8,12 +12,33 @@ import { ActivatedRoute, Router, Params } from '@angular/router';
 })
 export class ManageComponent implements OnInit {
   videoOrder = '1';
+  clips: IClip[] = [];
+  activeClip: IClip | null = null;
+  sort$: BehaviorSubject<string>; // $-> observable identifier by developers
 
-  constructor(private route: ActivatedRoute, private router: Router) {}
+  constructor(
+    private route: ActivatedRoute,
+    private router: Router,
+    private clipService: ClipService,
+    private modal: ModalService
+  ) {
+    this.sort$ = new BehaviorSubject(this.videoOrder);
+  }
 
   ngOnInit(): void {
     this.route.queryParamMap.subscribe((params: Params) => {
       this.videoOrder = params['sort'] === '2' ? params['sort'] : '1';
+      this.sort$.next(this.videoOrder);
+    });
+    this.clipService.getUserClips(this.sort$).subscribe((docs) => {
+      this.clips = [];
+
+      docs.forEach((doc) => {
+        this.clips.push({
+          docID: doc.id,
+          ...doc.data(),
+        });
+      });
     });
   }
 
@@ -25,6 +50,34 @@ export class ManageComponent implements OnInit {
       queryParams: {
         sort: value,
       },
+    });
+  }
+
+  openModal($event: Event, clip: IClip): void {
+    $event.preventDefault();
+
+    this.activeClip = clip;
+
+    this.modal.toggleModal('editClip');
+  }
+
+  update($event: IClip) {
+    this.clips.forEach((element, index) => {
+      if (element.docID === $event.docID) {
+        this.clips[index].title = $event.title;
+      }
+    });
+  }
+
+  deleteClip($event: Event, clip: IClip) {
+    $event.preventDefault();
+
+    this.clipService.deleteClip(clip);
+
+    this.clips.forEach((element, index) => {
+      if (element.docID === clip.docID) {
+        this.clips.splice(index, 1);
+      }
     });
   }
 }
